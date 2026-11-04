@@ -1,0 +1,10 @@
+# Let Git decide text versus binary, and keep line endings stable on every OS.
+* text=auto
+*.go text eol=lf
+
+# Shell scripts break on Windows line endings.
+.githooks/* text eol=lf
+*.sh text eol=lf
+
+# Generated demo databases.
+*.sqlite binary

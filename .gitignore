@@ -1,0 +1,9 @@
+# Built binaries
+/lode
+/lode.exe
+/dist/
+*.test
+/demo.toml
+/people.csv
+/examples/*.sqlite
+/docs

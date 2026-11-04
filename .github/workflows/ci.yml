@@ -1,0 +1,77 @@
+# Checks every push and pull request: real databases on Linux, a build and tests on Windows and macOS.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Linux, with real databases)
+    runs-on: ubuntu-latest
+
+    env:
+      CGO_ENABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: vet
+        run: go vet ./...
+
+      - name: test
+        run: bash scripts/test-all.sh
+
+  cross-platform:
+    name: Build and test (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows amd64
+            os: windows-latest
+          - name: macOS arm64
+            os: macos-latest
+
+    env:
+      CGO_ENABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: vet
+        run: go vet ./...
+
+      - name: build
+        run: go build ./...
+
+      - name: test
+        run: go test -short -count=1 ./...
+
+      - name: cross-compile for macOS Intel
+        if: runner.os == 'macOS'
+        env:
+          GOOS: darwin
+          GOARCH: amd64
+        run: go build -o /dev/null ./cmd/lode

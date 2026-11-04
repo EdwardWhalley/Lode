@@ -1,0 +1,12 @@
+#!/bin/sh
+# Fast checks before every commit. Enable once per clone: git config core.hooksPath .githooks
+set -e
+
+unformatted="$(gofmt -l .)"
+if [ -n "$unformatted" ]; then
+	echo "pre-commit: these files need gofmt (run: gofmt -w .):"
+	echo "$unformatted"
+	exit 1
+fi
+
+go test -count=1 ./internal/guard/

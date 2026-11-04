@@ -1,0 +1,5 @@
+package source_test
+
+import "fmt"
+
+func sprint(v any) string { return fmt.Sprint(v) }

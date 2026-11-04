@@ -1,0 +1,92 @@
+# Pushing a tag like v0.1.0 builds lode for each platform and creates a draft GitHub Release to check and publish by hand.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build (${{ matrix.goos }} ${{ matrix.goarch }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: ubuntu-22.04, goos: linux, goarch: amd64, ext: "" }
+          - { os: macos-latest, goos: darwin, goarch: arm64, ext: "" }
+          - { os: macos-latest, goos: darwin, goarch: amd64, ext: "" }
+          - { os: windows-latest, goos: windows, goarch: amd64, ext: ".exe" }
+
+    env:
+      CGO_ENABLED: "1"
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      TAG: ${{ github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: test
+        if: matrix.goos != 'darwin' || matrix.goarch == 'arm64'
+        run: go test -short -count=1 ./...
+        env:
+          GOOS: ""
+          GOARCH: ""
+
+      - name: build
+        shell: bash
+        run: |
+          mkdir dist
+          name="lode_${TAG}_${GOOS}_${GOARCH}${{ matrix.ext }}"
+          go build -trimpath -ldflags "-s -w -X main.version=${TAG}" -o "dist/${name}" ./cmd/lode
+          ls -l dist
+
+      - name: smoke test
+        if: matrix.goos != 'darwin' || matrix.goarch == 'arm64'
+        shell: bash
+        run: |
+          out="$(./dist/lode_${TAG}_${GOOS}_${GOARCH}${{ matrix.ext }} --version)"
+          echo "$out"
+          [ "$out" = "lode ${TAG}" ]
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lode-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: checksums
+        run: |
+          cd dist
+          sha256sum lode_* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: create release
+        run: gh release create "$TAG" dist/* --draft --title "$TAG" --generate-notes
